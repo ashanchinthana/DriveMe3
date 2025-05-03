@@ -244,4 +244,127 @@ export const searchPoliceAccounts = async (query) => {
     
     throw error.response?.data || { message: 'Failed to search police accounts.' };
   }
+};
+
+// Track last API call time for admins cache
+let lastAdminAccountsFetchTime = 0;
+
+// Get all admin accounts
+export const getAdminAccounts = async () => {
+  try {
+    // Check if we've made this call recently
+    const now = Date.now();
+    if (now - lastAdminAccountsFetchTime < DEBOUNCE_DELAY) {
+      console.log('Skipping repeated admin accounts API call (called too frequently)');
+      return JSON.parse(localStorage.getItem('adminAccountsCache')) || { 
+        success: true, 
+        data: [],
+        count: 0,
+        message: 'Using cached data due to frequent calls' 
+      };
+    }
+    
+    console.log('Calling API to get admin accounts');
+    lastAdminAccountsFetchTime = now;
+    
+    const response = await axios.get(API_URL + 'admins', setAuthHeader());
+    
+    console.log('Admin accounts API response:', response.status);
+    
+    // Check if response has the expected structure
+    if (!response.data || typeof response.data !== 'object') {
+      console.error('Invalid API response format:', response.data);
+      throw new Error('Invalid response format received from server');
+    }
+    
+    // Cache successful response
+    localStorage.setItem('adminAccountsCache', JSON.stringify(response.data));
+    
+    return response.data;
+  } catch (error) {
+    console.error('Get admin accounts error details:', error);
+    
+    if (error.response) {
+      if (error.response.status === 401) {
+        logoutAdmin();
+        throw { message: 'Session expired. Please login again.' };
+      }
+      
+      throw error.response.data || { message: 'Server error: ' + error.response.status };
+    } else if (error.request) {
+      throw { message: 'No response from server. Please check your connection.' };
+    } else {
+      throw { message: error.message || 'Failed to fetch admin accounts.' };
+    }
+  }
+};
+
+// Get single admin account
+export const getAdminAccount = async (id) => {
+  try {
+    const response = await axios.get(API_URL + `admins/${id}`, setAuthHeader());
+    return response.data;
+  } catch (error) {
+    console.error('Get admin account error:', error);
+    throw error.response?.data || { message: 'Failed to fetch admin account details.' };
+  }
+};
+
+// Create new admin account
+export const createAdminAccount = async (accountData) => {
+  try {
+    const response = await axios.post(API_URL + 'admins', accountData, setAuthHeader());
+    return response.data;
+  } catch (error) {
+    console.error('Create admin account error:', error);
+    throw error.response?.data || { message: 'Failed to create admin account.' };
+  }
+};
+
+// Update admin account
+export const updateAdminAccount = async (id, updateData) => {
+  try {
+    const response = await axios.put(API_URL + `admins/${id}`, updateData, setAuthHeader());
+    return response.data;
+  } catch (error) {
+    console.error('Update admin account error:', error);
+    throw error.response?.data || { message: 'Failed to update admin account.' };
+  }
+};
+
+// Delete admin account
+export const deleteAdminAccount = async (id) => {
+  try {
+    const response = await axios.delete(API_URL + `admins/${id}`, setAuthHeader());
+    return response.data;
+  } catch (error) {
+    console.error('Delete admin account error:', error);
+    throw error.response?.data || { message: 'Failed to delete admin account.' };
+  }
+};
+
+// Search admin accounts by ID or name
+export const searchAdminAccounts = async (query) => {
+  try {
+    console.log('Searching admin accounts with query:', query);
+    const response = await axios.get(
+      API_URL + 'admins/search?q=' + encodeURIComponent(query), 
+      setAuthHeader()
+    );
+    
+    if (!response.data || typeof response.data !== 'object') {
+      throw new Error('Invalid response format received from server');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Search admin accounts error:', error);
+    
+    if (error.response?.status === 401) {
+      logoutAdmin();
+      throw { message: 'Session expired. Please login again.' };
+    }
+    
+    throw error.response?.data || { message: 'Failed to search admin accounts.' };
+  }
 }; 

@@ -6,9 +6,22 @@ import {
   logoutAdmin, 
   getPoliceAccounts, 
   deletePoliceAccount,
-  searchPoliceAccounts
+  searchPoliceAccounts,
+  getAdminAccounts,
+  deleteAdminAccount,
+  searchAdminAccounts
 } from '../../services/adminService';
+import {
+  getAllUsers,
+  getUser,
+  createUser,
+  updateUser,
+  deleteUser,
+  searchUsers
+} from '../../services/userManagementService';
 import PoliceAccountForm from '../../components/admin/PoliceAccountForm';
+import AdminAccountForm from '../../components/admin/AdminAccountForm';
+import UserForm from '../../components/admin/UserForm';
 
 const DashboardContainer = styled.div`
   max-width: 1200px;
@@ -196,12 +209,13 @@ const debounce = (fn, delay) => {
       clearTimeout(timeoutId);
     }
     timeoutId = setTimeout(() => {
-      fn(...args);
+      fn.apply(this, args);
     }, delay);
   };
 };
 
 const AdminDashboard = () => {
+  // Police accounts state
   const [policeAccounts, setPoliceAccounts] = useState([]);
   const [filteredAccounts, setFilteredAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -210,6 +224,26 @@ const AdminDashboard = () => {
   const [accountToEdit, setAccountToEdit] = useState(null);
   const [initialized, setInitialized] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Admin accounts state
+  const [adminAccounts, setAdminAccounts] = useState([]);
+  const [filteredAdminAccounts, setFilteredAdminAccounts] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(true);
+  const [adminError, setAdminError] = useState('');
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminToEdit, setAdminToEdit] = useState(null);
+  const [adminInitialized, setAdminInitialized] = useState(false);
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  
+  // User accounts state
+  const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [userLoading, setUserLoading] = useState(true);
+  const [userError, setUserError] = useState('');
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userToEdit, setUserToEdit] = useState(null);
+  const [userInitialized, setUserInitialized] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
   
   const navigate = useNavigate();
   const admin = getCurrentAdmin();
@@ -228,7 +262,21 @@ const AdminDashboard = () => {
       fetchAccountsData();
       setInitialized(true);
     }
-  }, [admin, navigate, initialized]);
+    
+    // Load admin accounts
+    if (!adminInitialized) {
+      console.log('Loading admin accounts initially');
+      fetchAdminAccountsData();
+      setAdminInitialized(true);
+    }
+    
+    // Load user accounts
+    if (!userInitialized) {
+      console.log('Loading user accounts initially');
+      fetchUserData();
+      setUserInitialized(true);
+    }
+  }, [admin, navigate, initialized, adminInitialized, userInitialized]);
   
   // Filter accounts when search query changes
   useEffect(() => {
@@ -301,7 +349,7 @@ const AdminDashboard = () => {
       
       if (response && response.success && Array.isArray(response.data)) {
         console.log(`Successfully loaded ${response.data.length} police accounts`);
-        setPoliceAccounts(response.data);
+      setPoliceAccounts(response.data);
         setFilteredAccounts(response.data);
       } else {
         console.error('Invalid response format:', response);
@@ -355,6 +403,247 @@ const AdminDashboard = () => {
     reloadData();
   };
   
+  // Filter admin accounts when search query changes
+  useEffect(() => {
+    if (adminAccounts.length > 0) {
+      if (!adminSearchQuery.trim()) {
+        // If search is empty, show all accounts
+        setFilteredAdminAccounts(adminAccounts);
+      } else {
+        // For short queries, filter client-side
+        if (adminSearchQuery.length < 3) {
+          const query = adminSearchQuery.toLowerCase().trim();
+          const filtered = adminAccounts.filter(account => 
+            account.idNumber.toLowerCase().includes(query) || 
+            account.name.toLowerCase().includes(query) ||
+            (account.email && account.email.toLowerCase().includes(query))
+          );
+          setFilteredAdminAccounts(filtered);
+        } else {
+          // For longer queries, use server-side search
+          handleAdminServerSearch();
+        }
+      }
+    }
+  }, [adminSearchQuery, adminAccounts]);
+  
+  // Debounced server-side search for admin accounts
+  const handleAdminServerSearch = debounce(async () => {
+    if (adminSearchQuery.trim().length < 3) return;
+    
+    try {
+      setAdminLoading(true);
+      const response = await searchAdminAccounts(adminSearchQuery.trim());
+      
+      if (response && response.success) {
+        setFilteredAdminAccounts(response.data);
+      }
+    } catch (err) {
+      console.error('Server search error:', err);
+      // Fallback to client-side search if server search fails
+      const query = adminSearchQuery.toLowerCase().trim();
+      const filtered = adminAccounts.filter(account => 
+        account.idNumber.toLowerCase().includes(query) || 
+        account.name.toLowerCase().includes(query) ||
+        (account.email && account.email.toLowerCase().includes(query))
+      );
+      setFilteredAdminAccounts(filtered);
+    } finally {
+      setAdminLoading(false);
+    }
+  }, 500);
+  
+  // Handle admin search input change
+  const handleAdminSearchChange = (e) => {
+    const value = e.target.value;
+    setAdminSearchQuery(value);
+    
+    // If the search query is cleared, reset to show all accounts
+    if (!value.trim()) {
+      setFilteredAdminAccounts(adminAccounts);
+    }
+  };
+  
+  // Separate function to fetch admin accounts data
+  const fetchAdminAccountsData = async () => {
+    try {
+      setAdminLoading(true);
+      setAdminError('');
+      console.log('Fetching admin accounts data...');
+      
+      const response = await getAdminAccounts();
+      
+      if (response && response.success && Array.isArray(response.data)) {
+        console.log(`Successfully loaded ${response.data.length} admin accounts`);
+        setAdminAccounts(response.data);
+        setFilteredAdminAccounts(response.data);
+      } else {
+        console.error('Invalid response format:', response);
+        setAdminError('Received invalid data format from server');
+      }
+    } catch (err) {
+      console.error('Failed to load admin accounts:', err);
+      setAdminError(err.message || 'Failed to load admin accounts');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+  
+  // Manually reload admin data when needed
+  const reloadAdminData = () => {
+    console.log('Manually reloading admin accounts data');
+    fetchAdminAccountsData();
+  };
+  
+  // Handler functions for admin accounts
+  const handleCreateAdminAccount = () => {
+    setAdminToEdit(null);
+    setShowAdminModal(true);
+  };
+  
+  const handleEditAdminAccount = (account) => {
+    setAdminToEdit(account);
+    setShowAdminModal(true);
+  };
+  
+  const handleDeleteAdminAccount = async (id) => {
+    if (window.confirm('Are you sure you want to delete this admin account?')) {
+      try {
+        await deleteAdminAccount(id);
+        // Manually refresh the data after deletion
+        reloadAdminData();
+      } catch (err) {
+        setAdminError('Failed to delete admin account');
+        console.error(err);
+      }
+    }
+  };
+  
+  const handleAdminFormSuccess = () => {
+    setShowAdminModal(false);
+    // Manually refresh the data after form submission
+    reloadAdminData();
+  };
+  
+  // User search handler
+  const handleUserSearchChange = (e) => {
+    const query = e.target.value;
+    setUserSearchQuery(query);
+    
+    // Use debounced search for longer queries
+    if (query.length >= 3) {
+      debouncedUserSearch(query);
+    } else {
+      // For short queries, filter client-side
+      filterUserResults(query);
+    }
+  };
+  
+  // Debounced search for users
+  const debouncedUserSearch = useCallback(
+    debounce(async (query) => {
+      try {
+        console.log('Performing user search with query:', query);
+        const result = await searchUsers(query);
+        setFilteredUsers(result.data || []);
+      } catch (error) {
+        console.error('User search error:', error);
+        setUserError('Failed to search users: ' + (error.message || 'Unknown error'));
+      }
+    }, 500),
+    []
+  );
+  
+  // Client-side filtering for users
+  const filterUserResults = (query) => {
+    if (!query.trim()) {
+      setFilteredUsers(users);
+      return;
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    const filtered = users.filter(user => 
+      user.idNumber?.toLowerCase().includes(lowerQuery) || 
+      user.name?.toLowerCase().includes(lowerQuery) ||
+      user.email?.toLowerCase().includes(lowerQuery) ||
+      user.dlNumber?.toLowerCase().includes(lowerQuery)
+    );
+    
+    setFilteredUsers(filtered);
+  };
+  
+  // Fetch user data
+  const fetchUserData = async () => {
+    try {
+      setUserLoading(true);
+      const result = await getAllUsers();
+      console.log('Fetched users:', result);
+      
+      const userData = result.data || [];
+      setUsers(userData);
+      setFilteredUsers(userData);
+      setUserError('');
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setUserError('Failed to load users: ' + (error.message || 'Unknown error'));
+    } finally {
+      setUserLoading(false);
+    }
+  };
+  
+  // Reload user data
+  const reloadUserData = () => {
+    console.log('Reloading user data');
+    fetchUserData();
+  };
+  
+  // Handle creating new user
+  const handleCreateUser = () => {
+    setUserToEdit(null);
+    setShowUserModal(true);
+  };
+  
+  // Handle editing user
+  const handleEditUser = (user) => {
+    setUserToEdit(user);
+    setShowUserModal(true);
+  };
+  
+  // Handle deleting user
+  const handleDeleteUser = async (id) => {
+    if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      try {
+        await deleteUser(id);
+        alert('User deleted successfully');
+        reloadUserData();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        setUserError('Failed to delete user: ' + (error.message || 'Unknown error'));
+      }
+    }
+  };
+  
+  // Handle form submission for user
+  const handleUserFormSuccess = async (formData) => {
+    try {
+      if (userToEdit) {
+        // Update existing user
+        await updateUser(userToEdit.idNumber, formData);
+        alert('User updated successfully');
+      } else {
+        // Create new user
+        await createUser(formData);
+        alert('User created successfully');
+      }
+      
+      setShowUserModal(false);
+      reloadUserData();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      setUserError('Failed to save user: ' + (error.message || 'Unknown error'));
+    }
+  };
+  
   if (!admin) return null;
   
   return (
@@ -363,6 +652,7 @@ const AdminDashboard = () => {
         <Title>Admin Dashboard</Title>
         <ButtonGroup>
           <Button primary onClick={handleCreateAccount}>Create Police Account</Button>
+          <Button primary onClick={handleCreateAdminAccount}>Create Admin Account</Button>
           <Button onClick={handleLogout}>Logout</Button>
         </ButtonGroup>
       </Header>
@@ -444,6 +734,142 @@ const AdminDashboard = () => {
         </Card>
       </Section>
       
+      <Section>
+        <SectionTitle>Admin Account Management</SectionTitle>
+        <Card>
+          <h3>Manage Admin Accounts</h3>
+          <p>Create, update, and delete admin accounts.</p>
+          
+          {adminError && <p style={{ color: '#dc3545' }}>{adminError}</p>}
+          
+          <SearchBar 
+            value={adminSearchQuery}
+            onChange={handleAdminSearchChange}
+          />
+          
+          {adminSearchQuery.trim() && (
+            <p style={{ marginBottom: '1rem', color: '#6c757d' }}>
+              Found {filteredAdminAccounts.length} {filteredAdminAccounts.length === 1 ? 'result' : 'results'} for "{adminSearchQuery}"
+            </p>
+          )}
+          
+          {adminLoading ? (
+            <p>Loading admin accounts...</p>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Position</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAdminAccounts.length === 0 ? (
+                  <tr>
+                    <td colSpan="6">No admin accounts found</td>
+                  </tr>
+                ) : (
+                  filteredAdminAccounts.map(account => (
+                    <tr key={account._id || account.idNumber}>
+                      <td>{account.idNumber}</td>
+                      <td>{account.name}</td>
+                      <td>{account.email}</td>
+                      <td>{account.position}</td>
+                      <td>{new Date(account.createdAt).toLocaleString()}</td>
+                      <td>
+                        <ActionButton onClick={() => handleEditAdminAccount(account)}>Edit</ActionButton>
+                        <ActionButton 
+                          danger 
+                          onClick={() => handleDeleteAdminAccount(account.idNumber)}
+                          disabled={account.idNumber === admin.idNumber}
+                        >
+                          {account.idNumber === admin.idNumber ? 'Current User' : 'Delete'}
+                        </ActionButton>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+      </Section>
+      
+      <Section>
+        <SectionTitle>User Management</SectionTitle>
+        <Card>
+          <h3>Manage User Accounts</h3>
+          <p>Create, update, and delete user accounts.</p>
+          
+          <ButtonGroup>
+            <Button primary onClick={handleCreateUser}>Add New User</Button>
+            <Button onClick={reloadUserData}>Refresh List</Button>
+          </ButtonGroup>
+          
+          {userError && <p style={{ color: '#dc3545' }}>{userError}</p>}
+          
+          <SearchBar 
+            value={userSearchQuery}
+            onChange={handleUserSearchChange}
+          />
+          
+          {userSearchQuery.trim() && (
+            <p style={{ marginBottom: '1rem', color: '#6c757d' }}>
+              Found {filteredUsers.length} {filteredUsers.length === 1 ? 'result' : 'results'} for "{userSearchQuery}"
+            </p>
+          )}
+          
+          {userLoading ? (
+            <p>Loading users...</p>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>ID Number</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>License</th>
+                  <th>License Expiry</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan="7">No users found</td>
+                  </tr>
+                ) : (
+                  filteredUsers.map(user => (
+                    <tr key={user._id || user.idNumber}>
+                      <td>{user.idNumber}</td>
+                      <td>{user.name}</td>
+                      <td>{user.email}</td>
+                      <td>{user.phone}</td>
+                      <td>{user.dlNumber}</td>
+                      <td>{new Date(user.dlExpireDate).toLocaleDateString()}</td>
+                      <td>
+                        <ActionButton onClick={() => handleEditUser(user)}>Edit</ActionButton>
+                        <ActionButton 
+                          danger 
+                          onClick={() => handleDeleteUser(user.idNumber)}
+                        >
+                          Delete
+                        </ActionButton>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+      </Section>
+      
       {showModal && (
         <Modal>
           <ModalContent>
@@ -455,6 +881,38 @@ const AdminDashboard = () => {
               accountToEdit={accountToEdit}
               onSuccess={handleFormSuccess}
               onCancel={() => setShowModal(false)}
+            />
+          </ModalContent>
+        </Modal>
+      )}
+      
+      {showAdminModal && (
+        <Modal>
+          <ModalContent>
+            <ModalHeader>
+              <h3>{adminToEdit ? 'Edit Admin Account' : 'Create Admin Account'}</h3>
+              <CloseButton onClick={() => setShowAdminModal(false)}>&times;</CloseButton>
+            </ModalHeader>
+            <AdminAccountForm 
+              accountToEdit={adminToEdit}
+              onSuccess={handleAdminFormSuccess}
+              onCancel={() => setShowAdminModal(false)}
+            />
+          </ModalContent>
+        </Modal>
+      )}
+      
+      {showUserModal && (
+        <Modal>
+          <ModalContent>
+            <ModalHeader>
+              <h3>{userToEdit ? 'Edit User Account' : 'Create User Account'}</h3>
+              <CloseButton onClick={() => setShowUserModal(false)}>&times;</CloseButton>
+            </ModalHeader>
+            <UserForm 
+              userToEdit={userToEdit}
+              onSuccess={handleUserFormSuccess}
+              onCancel={() => setShowUserModal(false)}
             />
           </ModalContent>
         </Modal>

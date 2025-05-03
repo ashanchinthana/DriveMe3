@@ -143,7 +143,7 @@ const Home = () => {
         <p>Access the admin portal to manage police accounts and system settings.</p>
         <AdminButtonContainer>
           <AdminButton to="/admin/login">Admin Login</AdminButton>
-          <AdminButton to="/admin/register">Admin Register</AdminButton>
+         <AdminButton to="/admin/register">Admin Register</AdminButton>
         </AdminButtonContainer>
       </AdminSection>
     </HomeContainer>
