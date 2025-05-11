@@ -70,19 +70,7 @@ export default function OfficerDashboard() {
             <Text style={styles.cardDescription}>Record new traffic violations</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.card} onPress={() => Alert.alert('Feature', 'License Verification feature coming soon')}>
-            <Text style={styles.cardIcon}>📄</Text>
-            <Text style={styles.cardTitle}>License Verification</Text>
-            <Text style={styles.cardDescription}>Verify driver licenses</Text>
-          </TouchableOpacity>
-        </View>
         
-        <View style={styles.cardContainer}>
-          <TouchableOpacity style={styles.card} onPress={() => Alert.alert('Feature', 'View Open Fines feature coming soon')}>
-            <Text style={styles.cardIcon}>💰</Text>
-            <Text style={styles.cardTitle}>View Open Fines</Text>
-            <Text style={styles.cardDescription}>Check outstanding fines</Text>
-          </TouchableOpacity>
           
           <TouchableOpacity style={styles.card} onPress={() => Alert.alert('Feature', 'Vehicle Records feature coming soon')}>
             <Text style={styles.cardIcon}>🚘</Text>
