@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { authService } from '../services/api';
+import { authService, fineService } from '../services/api';
 import PoliceBadge from '../../components/PoliceBadge';
 
 export default function OfficerDashboard() {
@@ -18,7 +19,15 @@ export default function OfficerDashboard() {
     name: '',
     id: ''
   });
+  const [activityData, setActivityData] = useState({
+    totalFines: 0,
+    totalAmount: 0,
+    uniqueLicenses: 0,
+    isMockData: false
+  });
+  const [timeframe, setTimeframe] = useState('daily');
   const [loading, setLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -37,6 +46,79 @@ export default function OfficerDashboard() {
 
     loadUserData();
   }, []);
+
+  // Fetch officer activity data
+  useEffect(() => {
+    const fetchActivityData = async () => {
+      try {
+        setActivityLoading(true);
+        console.log(`[OfficerDashboard] Fetching activity data for timeframe: ${timeframe}`);
+        
+        // Get officer ID for debugging
+        const officerId = await authService.getUserId();
+        console.log(`[OfficerDashboard] Current officer ID: ${officerId}`);
+        
+        const data = await fineService.getOfficerActivity(timeframe);
+        console.log('[OfficerDashboard] Activity data received:', JSON.stringify(data));
+        
+        if (data && data.success && data.summary) {
+          console.log(`[OfficerDashboard] Setting activity data: ${data.summary.totalFines} fines, ${data.summary.totalAmount} amount, ${data.summary.uniqueLicenses} licenses, isMockData: ${data.isMockData}`);
+          setActivityData({
+            totalFines: data.summary.totalFines || 0,
+            totalAmount: data.summary.totalAmount || 0,
+            uniqueLicenses: data.summary.uniqueLicenses || 0,
+            isMockData: data.isMockData || false
+          });
+        } else {
+          console.warn('[OfficerDashboard] Received unexpected data format:', data);
+          // Set default values if data format is unexpected
+          setActivityData({
+            totalFines: 0,
+            totalAmount: 0,
+            uniqueLicenses: 0,
+            isMockData: false
+          });
+        }
+      } catch (error) {
+        console.error('[OfficerDashboard] Error fetching activity data:', error);
+        if (error.response) {
+          console.error('[OfficerDashboard] Error response:', error.response.data);
+          console.error('[OfficerDashboard] Status:', error.response.status);
+        }
+        // Set default values if there's an error
+        setActivityData({
+          totalFines: 0,
+          totalAmount: 0,
+          uniqueLicenses: 0,
+          isMockData: false
+        });
+        
+        // Check for connection issues
+        try {
+          const isLoggedIn = await authService.isLoggedIn();
+          console.log(`[OfficerDashboard] User is logged in: ${isLoggedIn}`);
+        } catch (authError) {
+          console.error('[OfficerDashboard] Auth check error:', authError);
+        }
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+
+    fetchActivityData();
+  }, [timeframe]);
+
+  // Format currency for display
+  const formatCurrency = (amount) => {
+    return `RS ${amount.toFixed(2)}`;
+  };
+
+  // Change timeframe and refresh data
+  const handleTimeframeChange = (newTimeframe) => {
+    if (newTimeframe !== timeframe) {
+      setTimeframe(newTimeframe);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -70,29 +152,65 @@ export default function OfficerDashboard() {
             <Text style={styles.cardDescription}>Record new traffic violations</Text>
           </TouchableOpacity>
           
-        
-          
           <TouchableOpacity style={styles.card} onPress={() => Alert.alert('Feature', 'Vehicle Records feature coming soon')}>
             <Text style={styles.cardIcon}>🚘</Text>
             <Text style={styles.cardTitle}>Violation predictor</Text>
-            <Text style={styles.cardDescription}>Check vViolation predictor</Text>
+            <Text style={styles.cardDescription}>Check violation predictor</Text>
           </TouchableOpacity>
         </View>
         
         <View style={styles.reportContainer}>
-          <Text style={styles.reportTitle}>Daily Activity</Text>
-          <View style={styles.reportItem}>
-            <Text style={styles.reportLabel}>Violations Issued:</Text>
-            <Text style={styles.reportValue}>0</Text>
+          <View style={styles.reportHeader}>
+            <Text style={styles.reportTitle}>Daily Activity</Text>
+            <View style={styles.timeframeSelector}>
+              <TouchableOpacity
+                style={[styles.timeframeButton, timeframe === 'daily' && styles.activeTimeframe]}
+                onPress={() => handleTimeframeChange('daily')}
+              >
+                <Text style={[styles.timeframeText, timeframe === 'daily' && styles.activeTimeframeText]}>Day</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.timeframeButton, timeframe === 'weekly' && styles.activeTimeframe]}
+                onPress={() => handleTimeframeChange('weekly')}
+              >
+                <Text style={[styles.timeframeText, timeframe === 'weekly' && styles.activeTimeframeText]}>Week</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.timeframeButton, timeframe === 'monthly' && styles.activeTimeframe]}
+                onPress={() => handleTimeframeChange('monthly')}
+              >
+                <Text style={[styles.timeframeText, timeframe === 'monthly' && styles.activeTimeframeText]}>Month</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.reportItem}>
-            <Text style={styles.reportLabel}>Licenses Verified:</Text>
-            <Text style={styles.reportValue}>0</Text>
-          </View>
-          <View style={styles.reportItem}>
-            <Text style={styles.reportLabel}>Fines Collected:</Text>
-            <Text style={styles.reportValue}>$0.00</Text>
-          </View>
+          
+          {activityLoading ? (
+            <ActivityIndicator size="small" color="#1A237E" style={styles.activityLoader} />
+          ) : (
+            <>
+              <View style={styles.reportItem}>
+                <Text style={styles.reportLabel}>Violations Issued:</Text>
+                <Text style={styles.reportValue}>{activityData.totalFines}</Text>
+              </View>
+              <View style={styles.reportItem}>
+                <Text style={styles.reportLabel}>Licenses Verified:</Text>
+                <Text style={styles.reportValue}>{activityData.uniqueLicenses}</Text>
+              </View>
+              <View style={styles.reportItem}>
+                <Text style={styles.reportLabel}>Fines Collected:</Text>
+                <Text style={styles.reportValue}>{formatCurrency(activityData.totalAmount)}</Text>
+              </View>
+              
+              {/* Display mock data indicator if present */}
+              {activityData.isMockData && (
+                <View style={styles.mockDataIndicator}>
+                  <Text style={styles.mockDataText}>
+                    *Demo data shown due to server connectivity issues
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
         </View>
       </ScrollView>
       
@@ -178,11 +296,38 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  reportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   reportTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1A237E',
-    marginBottom: 15,
+  },
+  timeframeSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 20,
+    padding: 2,
+  },
+  timeframeButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 18,
+  },
+  activeTimeframe: {
+    backgroundColor: '#1A237E',
+  },
+  timeframeText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  activeTimeframeText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   reportItem: {
     flexDirection: 'row',
@@ -200,6 +345,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A237E',
   },
+  activityLoader: {
+    padding: 20,
+  },
   footer: {
     padding: 20,
     backgroundColor: '#FFF',
@@ -216,5 +364,17 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  mockDataIndicator: {
+    marginTop: 10,
+    paddingTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: '#EEE',
+  },
+  mockDataText: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 }); 

@@ -449,6 +449,73 @@ export const fineService = {
   updateFineStatus: async (fineId, statusData) => {
     const response = await api.put(`/fines/${fineId}/status`, statusData);
     return response;
+  },
+  
+  getOfficerActivity: async (timeframe = 'daily') => {
+    try {
+      console.log(`[API] Fetching officer activity for timeframe: ${timeframe}`);
+      
+      // Get token for debugging
+      const token = await AsyncStorage.getItem('token');
+      console.log(`[API] Auth token present: ${!!token}`);
+      
+      // Get user ID for debugging
+      const userId = await AsyncStorage.getItem('userId');
+      console.log(`[API] User ID: ${userId}`);
+      
+      const response = await api.get(`/fines/officer-activity?timeframe=${timeframe}`);
+      console.log(`[API] Officer activity response status: ${response.status}`);
+      
+      if (!response.data) {
+        console.error('[API] No data in response');
+        throw new Error('No data received from server');
+      }
+      
+      console.log(`[API] Activity data: ${JSON.stringify(response.data)}`);
+      
+      if (response.data.success) {
+        if (response.data.isMockData) {
+          console.log('[API] This is mock data from the server');
+        }
+        
+        if (response.data.summary) {
+          console.log(`[API] Received officer activity data: ${response.data.summary.totalFines} fines, $${response.data.summary.totalAmount}`);
+        } else {
+          console.warn('[API] Missing summary in response data');
+        }
+        
+        // Return complete response, including isMockData flag if present
+        return {
+          ...response.data,
+          isMockData: response.data.isMockData || false
+        };
+      } else {
+        console.warn('[API] Missing success in response data');
+        throw new Error('Invalid response format from server');
+      }
+    } catch (error) {
+      console.error('[API] Error fetching officer activity:', error.message);
+      
+      // Enhanced error information
+      if (error.response) {
+        console.error(`[API] Status: ${error.response.status}`);
+        console.error('[API] Response data:', error.response.data);
+        console.error('[API] Response headers:', error.response.headers);
+      } else if (error.request) {
+        console.error('[API] No response received:', error.request);
+        // Try to determine if there's a connection issue
+        try {
+          const netInfo = await NetInfo.fetch();
+          console.log(`[API] Network connected: ${netInfo.isConnected}, type: ${netInfo.type}`);
+        } catch (netError) {
+          console.error('[API] Error checking network:', netError);
+        }
+      } else {
+        console.error('[API] Error setting up request:', error.message);
+      }
+      
+      throw error;
+    }
   }
 };
 
